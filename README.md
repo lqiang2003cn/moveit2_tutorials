@@ -4,7 +4,7 @@ This is the primary documentation for the MoveIt project.
 
 ## Build Status
 
-This repository is currently built automatically by Github Actions:
+This reposi09tory is currently built automatically by Github Actions:
 
 - main: [![CI](https://github.com/ros-planning/moveit2_tutorials/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/ros-planning/moveit2_tutorials/actions/workflows/ci.yaml?query=branch%3Amain)
 - main: [![Format](https://github.com/ros-planning/moveit2_tutorials/actions/workflows/format.yml/badge.svg?branch=main)](https://github.com/ros-planning/moveit2_tutorials/actions/workflows/format.yml?query=branch%3Amain)
