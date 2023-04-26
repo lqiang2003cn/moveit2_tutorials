@@ -11,6 +11,10 @@
 #endif
 #if __has_include(<tf2_eigen/tf2_eigen.hpp>)
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <fstream>
+#include <filesystem>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+
 #else
 #include <tf2_eigen/tf2_eigen.h>
 #endif
@@ -29,6 +33,8 @@ public:
 
   void setupPlanningScene();
 
+  void declare_param(std::string param_name, std::string& param_value);
+
 private:
   // Compose an MTC task from a series of stages.
   mtc::Task createTask();
@@ -41,9 +47,15 @@ rclcpp::node_interfaces::NodeBaseInterface::SharedPtr MTCTaskNode::getNodeBaseIn
   return node_->get_node_base_interface();
 }
 
+
+
 MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions& options)
   : node_{ std::make_shared<rclcpp::Node>("mtc_node", options) }
 {
+}
+
+void MTCTaskNode::declare_param(std::string param_name, std::string &param_value) {
+  this->node_->declare_parameter<std::string>(param_name, param_value);
 }
 
 void MTCTaskNode::setupPlanningScene()
@@ -149,10 +161,10 @@ mtc::Task MTCTaskNode::createTask()
   // In fact, `task` itself is a SerialContainer by default.
   {
     auto grasp = std::make_unique<mtc::SerialContainer>("pick object");
-    task.properties().exposeTo(grasp->properties(), { "eef", "hand", "group", "ik_frame" });
+    task.properties().exposeTo(grasp->properties(), { "eef", "group", "ik_frame" });
     // clang-format off
     grasp->properties().configureInitFrom(mtc::Stage::PARENT,
-                                          { "eef", "hand", "group", "ik_frame" });
+                                          { "eef", "group", "ik_frame" });
     // clang-format on
 
     {
@@ -268,10 +280,10 @@ mtc::Task MTCTaskNode::createTask()
 
   {
     auto place = std::make_unique<mtc::SerialContainer>("place object");
-    task.properties().exposeTo(place->properties(), { "eef", "hand", "group", "ik_frame" });
+    task.properties().exposeTo(place->properties(), { "eef", "group", "ik_frame" });
     // clang-format off
     place->properties().configureInitFrom(mtc::Stage::PARENT,
-                                          { "eef", "hand", "group", "ik_frame" });
+                                          { "eef", "group", "ik_frame" });
     // clang-format on
 
     /****************************************************
@@ -355,16 +367,36 @@ mtc::Task MTCTaskNode::createTask()
   return task;
 }
 
+void loadModelFile(std::string package_name, std::string filename, std::string& file_content)
+{
+  std::filesystem::path res_path(ament_index_cpp::get_package_share_directory(package_name));
+  std::string xml_string;
+  std::fstream xml_file((res_path / filename).string().c_str(), std::fstream::in);
+  while (xml_file.good())
+  {
+    std::string line;
+    std::getline(xml_file, line);
+    xml_string += (line + "\n");
+  }
+  xml_file.close();
+  file_content = xml_string;
+}
+
 int main(int argc, char** argv)
 {
-  rclcpp::init(argc, argv);
+  std::string robot_description_string, srdf_string;
+  loadModelFile("moveit_resources_panda_description", "urdf/panda.urdf", robot_description_string);
+  loadModelFile("moveit_resources_panda_moveit_config", "config/panda.srdf", srdf_string);
 
+  rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
   options.automatically_declare_parameters_from_overrides(true);
 
   auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
-  rclcpp::executors::MultiThreadedExecutor executor;
+  mtc_task_node->declare_param("robot_description", robot_description_string);
+  mtc_task_node->declare_param("robot_description_semantic", srdf_string);
 
+  rclcpp::executors::MultiThreadedExecutor executor;
   auto spin_thread = std::make_unique<std::thread>([&executor, &mtc_task_node]() {
     executor.add_node(mtc_task_node->getNodeBaseInterface());
     executor.spin();
