@@ -18,6 +18,7 @@
 #else
 #include <tf2_eigen/tf2_eigen.h>
 #endif
+#include <yaml-cpp/yaml.h>
 
 static const rclcpp::Logger LOGGER = rclcpp::get_logger("mtc_tutorial");
 namespace mtc = moveit::task_constructor;
@@ -33,13 +34,17 @@ public:
 
   void setupPlanningScene();
 
-  void declare_param(std::string param_name, std::string& param_value);
+  void declare_param(std::string param_name, std::string param_value);
+  rclcpp::Node::SharedPtr node_;
+
 
 private:
   // Compose an MTC task from a series of stages.
   mtc::Task createTask();
   mtc::Task task_;
-  rclcpp::Node::SharedPtr node_;
+
+
+
 };
 
 rclcpp::node_interfaces::NodeBaseInterface::SharedPtr MTCTaskNode::getNodeBaseInterface()
@@ -52,9 +57,11 @@ rclcpp::node_interfaces::NodeBaseInterface::SharedPtr MTCTaskNode::getNodeBaseIn
 MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions& options)
   : node_{ std::make_shared<rclcpp::Node>("mtc_node", options) }
 {
+
+
 }
 
-void MTCTaskNode::declare_param(std::string param_name, std::string &param_value) {
+void MTCTaskNode::declare_param(std::string param_name, std::string param_value) {
   this->node_->declare_parameter<std::string>(param_name, param_value);
 }
 
@@ -382,19 +389,65 @@ void loadModelFile(std::string package_name, std::string filename, std::string& 
   file_content = xml_string;
 }
 
+bool inputKinematicsYAML(const std::filesystem::path& file_path)
+{
+  // Load file
+  std::ifstream input_stream(file_path);
+  if (!input_stream.good())
+  {
+    return false;
+  }
+
+  // Begin parsing
+  try
+  {
+    YAML::Node doc = YAML::Load(input_stream);
+
+    // Loop through all groups
+    for (YAML::const_iterator group_it = doc.begin(); group_it != doc.end(); ++group_it)
+    {
+      const std::string& group_name = group_it->first.as<std::string>();
+      const YAML::Node& group = group_it->second;
+
+    }
+
+    return true;
+  }
+  catch (YAML::ParserException& e)  // Catch errors
+  {
+    return false;
+  }
+}
+
+void parseNode(YAML::Node node) {
+  if (node.IsMap()) {
+    for (YAML::iterator it = node.begin(); it != node.end(); ++it) {
+      parseNode(it->second);
+    }
+  }
+  else if (node.IsSequence()) {
+    for (YAML::iterator it = node.begin(); it != node.end(); ++it) {
+      parseNode(*it);
+    }
+  }
+  else if (node.IsScalar()) {
+    // Perform modifications here.
+    std::cout << node;
+  }
+}
+
 int main(int argc, char** argv)
 {
-  std::string robot_description_string, srdf_string;
-  loadModelFile("moveit_resources_panda_description", "urdf/panda.urdf", robot_description_string);
-  loadModelFile("moveit_resources_panda_moveit_config", "config/panda.srdf", srdf_string);
-
   rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
   options.automatically_declare_parameters_from_overrides(true);
-
+  options.allow_undeclared_parameters(true);
   auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
-  mtc_task_node->declare_param("robot_description", robot_description_string);
-  mtc_task_node->declare_param("robot_description_semantic", srdf_string);
+
+  auto synchronous_client = std::make_shared<rclcpp::SyncParametersClient>(mtc_task_node->node_);
+  const auto pkg_path = ament_index_cpp::get_package_share_directory("moveit2_tutorials");
+  const std::string moveit_config_path = pkg_path + "/config/moveit_config.yaml";
+  synchronous_client->load_parameters(moveit_config_path);
 
   rclcpp::executors::MultiThreadedExecutor executor;
   auto spin_thread = std::make_unique<std::thread>([&executor, &mtc_task_node]() {
@@ -408,5 +461,6 @@ int main(int argc, char** argv)
 
   spin_thread->join();
   rclcpp::shutdown();
+
   return 0;
 }

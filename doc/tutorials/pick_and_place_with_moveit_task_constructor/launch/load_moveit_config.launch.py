@@ -7,18 +7,14 @@ def generate_launch_description():
     moveit_config = MoveItConfigsBuilder("moveit_resources_panda").to_dict()
 
     # MTC Demo node
-    pick_place_demo = Node(
-        # package="mtc_tutorial",
-        # executable="mtc_tutorial",
-        package="moveit2_tutorials",
-        executable="mtc_tutorial",
-        output="screen",
-        parameters=[
-            moveit_config,
-        ],
+    global_param_node = Node(
+        package='moveit2_tutorials',
+        executable='global_parameter_server',
+        name='global_parameter_server',
+        parameters=[moveit_config]
     )
 
-    return LaunchDescription([pick_place_demo])
+    return LaunchDescription([global_param_node])
 
 
 if __name__ == "__main__":
